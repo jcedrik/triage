@@ -29,6 +29,10 @@ class Alert:
     signature: str
     severity: Severity
     technique_id: str = ""
+    category: str = ""
+    src_ip: str = ""
+    dst_ip: str = ""
+    raw: str = ""
 
 
 @dataclass
@@ -36,4 +40,13 @@ class Incident:
     incident_id: str
     host: str
     alerts: list = field(default_factory=list)
+    tactics: set = field(default_factory=set)
+    techniques: set = field(default_factory=set)
     risk_score: int = 0
+    severity: Severity = Severity.INFO
+
+    def first_seen(self):
+        return min(a.timestamp for a in self.alerts)
+
+    def last_seen(self):
+        return max(a.timestamp for a in self.alerts)
