@@ -1,0 +1,10 @@
+[
+  {"timestamp": "2026-06-13T02:14:03", "host": "web-01", "signature": "Nmap service scan", "severity": "low", "technique_id": "T1046", "category": "recon", "src_ip": "203.0.113.9", "dst_ip": "10.0.0.5"},
+  {"timestamp": "2026-06-13T02:15:11", "host": "web-01", "signature": "SQL injection attempt", "severity": "high", "technique_id": "T1190", "category": "web", "src_ip": "203.0.113.9", "dst_ip": "10.0.0.5"},
+  {"timestamp": "2026-06-13T02:16:40", "host": "web-01", "signature": "Web shell upload", "severity": "critical", "technique_id": "T1059", "category": "exploit", "src_ip": "203.0.113.9", "dst_ip": "10.0.0.5"},
+  {"timestamp": "2026-06-13T02:19:22", "host": "web-01", "signature": "Credential dumping tool", "severity": "critical", "technique_id": "T1003", "category": "credaccess", "src_ip": "203.0.113.9", "dst_ip": "10.0.0.5"},
+  {"timestamp": "2026-06-13T02:25:05", "host": "web-01", "signature": "Data exfil over HTTPS", "severity": "high", "technique_id": "T1041", "category": "exfil", "src_ip": "10.0.0.5", "dst_ip": "203.0.113.9"},
+  {"timestamp": "2026-06-13T03:40:00", "host": "db-02", "signature": "Brute force SSH", "severity": "medium", "technique_id": "T1110", "category": "credaccess", "src_ip": "198.51.100.7", "dst_ip": "10.0.0.8"},
+  {"timestamp": "2026-06-13T03:41:30", "host": "db-02", "signature": "Brute force SSH", "severity": "medium", "technique_id": "T1110", "category": "credaccess", "src_ip": "198.51.100.7", "dst_ip": "10.0.0.8"},
+  {"timestamp": "2026-06-13T09:02:00", "host": "ws-14", "signature": "Suspicious PowerShell", "severity": "medium", "technique_id": "T1059", "category": "execution", "src_ip": "10.0.0.22", "dst_ip": ""}
+]
