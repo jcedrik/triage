@@ -1,10 +1,15 @@
-"""Group alerts into incidents by host + time window."""
+"""Group alerts into incidents by host + time window.
+
+Within a host, a new incident starts when the gap since the last alert
+exceeds the window. Techniques/tactics are rolled up per incident.
+"""
 
 from __future__ import annotations
 
 from datetime import timedelta
 
 from .models import Incident
+from . import mitre
 
 
 class Correlator:
@@ -35,8 +40,13 @@ class Correlator:
         return incidents
 
     def _make(self, seq, host, alerts):
-        return Incident(
+        inc = Incident(
             incident_id=f"INC-{seq:04d}",
             host=host,
             alerts=list(alerts),
         )
+        for a in alerts:
+            if a.technique_id:
+                inc.techniques.add(a.technique_id)
+                inc.tactics.add(mitre.tactic_for(a.technique_id))
+        return inc
