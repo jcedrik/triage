@@ -25,7 +25,7 @@ def render_terminal(incidents: list, total_alerts: int) -> str:
         return f"{code}{text}{_RESET}" if color else text
 
     lines = []
-    lines.append(c(f"triage - {total_alerts} alerts -> "
+    lines.append(c(f"triage - {total_alerts} alerts correlated into "
                    f"{len(incidents)} incident(s)", _BOLD))
     lines.append("")
 
@@ -34,5 +34,15 @@ def render_terminal(incidents: list, total_alerts: int) -> str:
         tag = c(f"[{inc.severity.label().upper()}]", _COLORS[inc.severity])
         lines.append(f"{tag} {inc.incident_id}  host={inc.host}  "
                      f"risk={inc.risk_score}/100  alerts={len(inc.alerts)}")
+        if inc.tactics:
+            chain = " -> ".join(sorted(inc.tactics))
+            lines.append(f"   kill chain: {chain}")
+        lines.append(f"   window: {inc.first_seen():%Y-%m-%d %H:%M} "
+                     f"to {inc.last_seen():%H:%M}")
+        for a in sorted(inc.alerts, key=lambda x: x.severity, reverse=True)[:3]:
+            tech = f" [{a.technique_id}]" if a.technique_id else ""
+            lines.append(f"     - {a.severity.label():8s} {a.signature}{tech}")
+        if len(inc.alerts) > 3:
+            lines.append(f"     ... and {len(inc.alerts) - 3} more")
         lines.append("")
     return "\n".join(lines)
