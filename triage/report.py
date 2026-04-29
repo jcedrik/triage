@@ -35,7 +35,7 @@ def render_terminal(incidents: list, total_alerts: int) -> str:
         lines.append(f"{tag} {inc.incident_id}  host={inc.host}  "
                      f"risk={inc.risk_score}/100  alerts={len(inc.alerts)}")
         if inc.tactics:
-            chain = " -> ".join(sorted(inc.tactics))
+            chain = " -> ".join(mitre.sort_tactics(inc.tactics))
             lines.append(f"   kill chain: {chain}")
         lines.append(f"   window: {inc.first_seen():%Y-%m-%d %H:%M} "
                      f"to {inc.last_seen():%H:%M}")
