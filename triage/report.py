@@ -1,7 +1,8 @@
-"""Render incidents to the terminal."""
+"""Reporters: terminal and json."""
 
 from __future__ import annotations
 
+import json
 import sys
 
 from .models import Incident, Severity
@@ -46,3 +47,13 @@ def render_terminal(incidents: list, total_alerts: int) -> str:
             lines.append(f"     ... and {len(inc.alerts) - 3} more")
         lines.append("")
     return "\n".join(lines)
+
+
+def render_json(incidents: list, total_alerts: int) -> str:
+    ranked = sorted(incidents, key=lambda i: i.risk_score, reverse=True)
+    payload = {
+        "total_alerts": total_alerts,
+        "incident_count": len(incidents),
+        "incidents": [inc.to_dict() for inc in ranked],
+    }
+    return json.dumps(payload, indent=2)
