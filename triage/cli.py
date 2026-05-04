@@ -7,6 +7,7 @@ import argparse
 from .parsers import parse_json
 from .correlator import Correlator
 from .scorer import score_all
+from .models import Severity
 from . import report
 
 
@@ -14,13 +15,23 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="triage")
     p.add_argument("input")
     p.add_argument("--window", type=int, default=30)
+    p.add_argument("--json", metavar="FILE")
+    p.add_argument("--quiet", action="store_true")
     args = p.parse_args(argv)
 
     alerts = parse_json(args.input)
     incidents = Correlator(window_minutes=args.window).correlate(alerts)
     score_all(incidents)
-    print(report.render_terminal(incidents, len(alerts)))
-    return 0
+
+    if not args.quiet:
+        print(report.render_terminal(incidents, len(alerts)))
+
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            f.write(report.render_json(incidents, len(alerts)))
+
+    has_critical = any(i.severity == Severity.CRITICAL for i in incidents)
+    return 1 if has_critical else 0
 
 
 if __name__ == "__main__":
