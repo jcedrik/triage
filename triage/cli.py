@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from .parsers import parse_json
+from .parsers import load
 from .correlator import Correlator
 from .scorer import score_all
 from .models import Severity
@@ -19,7 +19,7 @@ def main(argv=None) -> int:
     p.add_argument("--quiet", action="store_true")
     args = p.parse_args(argv)
 
-    alerts = parse_json(args.input)
+    alerts = load(args.input)
     incidents = Correlator(window_minutes=args.window).correlate(alerts)
     score_all(incidents)
 
