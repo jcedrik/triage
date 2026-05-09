@@ -1,0 +1,4 @@
+timestamp,host,signature,severity,technique_id,category,src_ip,dst_ip
+2026-06-13T05:00:00,mail-03,Phishing link clicked,high,T1566,initial-access,,
+2026-06-13T05:02:00,mail-03,Macro execution,high,T1059,execution,,
+2026-06-13T05:04:00,mail-03,C2 beacon detected,critical,T1071,c2,10.0.0.30,203.0.113.44
