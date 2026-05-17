@@ -1,4 +1,4 @@
-"""CLI entry point."""
+"""CLI entry point for triage."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ def main(argv=None) -> int:
     p.add_argument("input")
     p.add_argument("--window", type=int, default=30)
     p.add_argument("--json", metavar="FILE")
+    p.add_argument("--html", metavar="FILE")
     p.add_argument("--quiet", action="store_true")
     args = p.parse_args(argv)
 
@@ -25,10 +26,12 @@ def main(argv=None) -> int:
 
     if not args.quiet:
         print(report.render_terminal(incidents, len(alerts)))
-
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
             f.write(report.render_json(incidents, len(alerts)))
+    if args.html:
+        with open(args.html, "w", encoding="utf-8") as f:
+            f.write(report.render_html(incidents, len(alerts)))
 
     has_critical = any(i.severity == Severity.CRITICAL for i in incidents)
     return 1 if has_critical else 0
