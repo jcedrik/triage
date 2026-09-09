@@ -4,6 +4,8 @@ A SOC ingests from many tools, each with its own format. We support two here:
 
   - triage JSON: the engine's native format, a list of alert objects.
   - generic CSV: a common denominator for exports from other tools.
+  - Suricata EVE: the newline-delimited eve.json that Suricata writes,
+    filtered to event_type == "alert". This is what a lab actually produces.
 
 Both normalize into the same Alert type so everything downstream is
 source-agnostic. Adding a new source means adding one parser here and nothing
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from datetime import datetime
 
 from .models import Alert, Severity
@@ -95,10 +98,81 @@ def parse_csv(path: str) -> list[Alert]:
     return alerts
 
 
-def load(path: str) -> list[Alert]:
-    """Dispatch on file extension."""
-    if path.endswith(".json"):
+# Suricata severity is 1 (highest) to 4. Map onto our scale.
+_SURICATA_SEVERITY = {1: Severity.CRITICAL, 2: Severity.HIGH, 3: Severity.MEDIUM, 4: Severity.LOW}
+
+# Suricata rule metadata often carries ATT&CK ids as
+# metadata: mitre_technique_id T1190, mitre_tactic_id TA0001
+# ET Open rules use "mitre_technique_id" in the rule metadata field.
+
+_MITRE_IN_METADATA = re.compile(r"mitre_technique_id\s*[:=]?\s*(T\d{4}(?:\.\d{3})?)", re.IGNORECASE)
+_MITRE_IN_SIG = re.compile(r"\b(T\d{4})(?:\.\d{3})?\b")
+
+
+def parse_suricata_eve(path: str) -> list[Alert]:
+    """Parse Suricata's eve.json (one JSON object per line).
+
+    Only event_type == "alert" records become alerts. The host is dest_ip
+    (the asset being attacked) unless a `host` field is present. The
+    technique id is read from the rule metadata when the rule carries one
+    (ET Open and Sigma-derived rules do), otherwise from the signature text.
+    """
+    alerts: list[Alert] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for n, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except ValueError as e:
+                raise ValueError(f"bad JSON on line {n}: {e}") from e
+            if ev.get("event_type") != "alert":
+                continue
+            al = ev.get("alert", {})
+            meta = al.get("metadata") or {}
+            technique = ""
+            # metadata is usually {"mitre_technique_id": ["T1190"], ...}
+            for key in ("mitre_technique_id", "mitre_technique"):
+                v = meta.get(key)
+                if v:
+                    technique = v[0] if isinstance(v, list) else str(v)
+                    break
+            if not technique:
+                m = _MITRE_IN_METADATA.search(json.dumps(meta)) or _MITRE_IN_SIG.search(al.get("signature", ""))
+                technique = m.group(1) if m else ""
+            technique = technique.split(".")[0] if technique else ""  # sub-techniques roll up
+            alerts.append(Alert(
+                timestamp=_parse_ts(ev["timestamp"]),
+                source_host=ev.get("host") or ev.get("dest_ip", "unknown"),
+                signature=al.get("signature", "unknown signature"),
+                severity=_SURICATA_SEVERITY.get(int(al.get("severity", 3)), Severity.MEDIUM),
+                technique_id=technique,
+                category=al.get("category", ""),
+                src_ip=ev.get("src_ip", ""),
+                dst_ip=ev.get("dest_ip", ""),
+                raw=line[:500],
+            ))
+    return alerts
+
+
+def load(path: str, fmt: str = "auto") -> list[Alert]:
+    """Dispatch on --format, or sniff the file when fmt is "auto"."""
+    if fmt == "auto":
+        if path.endswith(".csv"):
+            fmt = "csv"
+        elif path.endswith((".eve", ".eve.json")) or "eve" in path.rsplit("/", 1)[-1]:
+            fmt = "suricata"
+        elif path.endswith(".json"):
+            with open(path, "r", encoding="utf-8") as f:
+                head = f.read(2048).lstrip()
+            fmt = "suricata" if head.startswith("{") and '"event_type"' in head else "json"
+        else:
+            raise ValueError("unsupported input; use .json, .csv or Suricata eve.json (or pass --format)")
+    if fmt == "json":
         return parse_json(path)
-    if path.endswith(".csv"):
+    if fmt == "csv":
         return parse_csv(path)
-    raise ValueError("unsupported input; use .json or .csv")
+    if fmt == "suricata":
+        return parse_suricata_eve(path)
+    raise ValueError(f"unknown format: {fmt}")

@@ -37,6 +37,9 @@ _TACTIC_BONUS = 8
 _VOLUME_BONUS_PER_ALERT = 2
 _VOLUME_BONUS_CAP = 16
 
+# Ceiling for an incident made of one signature in one tactic (see below).
+_SINGLE_STAGE_CAP = 59
+
 
 def score_incident(inc: Incident) -> None:
     """Compute and set inc.risk_score (0-100) and inc.severity in place."""
@@ -57,6 +60,14 @@ def score_incident(inc: Incident) -> None:
     volume_bonus = min(len(inc.alerts) * _VOLUME_BONUS_PER_ALERT,
                        _VOLUME_BONUS_CAP)
     score += volume_bonus
+
+    # Single-stage dampening. A lone HIGH alert with no second tactic and no
+    # second signature is, on the labelled benchmark, a backup job or a
+    # scanner far more often than an intrusion. Cap it just below HIGH so it
+    # is still visible but does not page anyone. A lone CRITICAL still does.
+    distinct_sigs = len({a.signature for a in inc.alerts})
+    if worst < Severity.CRITICAL and distinct_tactics <= 1 and distinct_sigs == 1:
+        score = min(score, _SINGLE_STAGE_CAP)
 
     inc.risk_score = min(score, 100)
     inc.severity = _severity_from_score(inc.risk_score)

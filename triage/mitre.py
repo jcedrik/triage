@@ -68,6 +68,26 @@ TECHNIQUES: dict[str, tuple[str, str]] = {
     "T1567": ("Exfiltration Over Web Service", "Exfiltration"),
     "T1486": ("Data Encrypted for Impact", "Impact"),
     "T1490": ("Inhibit System Recovery", "Impact"),
+    # Added in 0.2 after running against Suricata ET Open metadata and the
+    # labelled benchmark, which both surfaced these as frequent.
+    "T1078": ("Valid Accounts", "Persistence"),
+    "T1505": ("Server Software Component", "Persistence"),  # web shells
+    "T1098": ("Account Manipulation", "Persistence"),
+    "T1562": ("Impair Defenses", "Defense Evasion"),
+    "T1036": ("Masquerading", "Defense Evasion"),
+    "T1557": ("Adversary-in-the-Middle", "Credential Access"),
+    "T1087": ("Account Discovery", "Discovery"),
+    "T1018": ("Remote System Discovery", "Discovery"),
+    "T1039": ("Data from Network Shared Drive", "Collection"),
+    "T1560": ("Archive Collected Data", "Collection"),
+    "T1573": ("Encrypted Channel", "Command and Control"),
+    "T1219": ("Remote Access Software", "Command and Control"),
+    "T1489": ("Service Stop", "Impact"),
+    "T1498": ("Network Denial of Service", "Impact"),
+    "T1195": ("Supply Chain Compromise", "Initial Access"),
+    "T1204": ("User Execution", "Execution"),
+    "T1047": ("Windows Management Instrumentation", "Execution"),
+    "T1499": ("Endpoint Denial of Service", "Impact"),
 }
 
 

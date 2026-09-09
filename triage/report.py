@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 import sys
 
-from .models import Incident, Severity
 from . import mitre
+from .models import Incident, Severity
 
 # ---- terminal ----
 
@@ -183,3 +183,36 @@ def render_html(incidents: list[Incident], total_alerts: int) -> str:
 def _esc(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;")
              .replace(">", "&gt;"))
+
+
+# ---- KQL (Microsoft Sentinel) ----
+# One hunting query per incident so an analyst on Sentinel can pivot from a
+# triage incident straight into the SIEM. Targets the CommonSecurityLog /
+# SecurityAlert tables; adjust the table name to your connector.
+
+
+def render_kql(incidents: list[Incident]) -> str:
+    out = ["// triage: generated hunting queries for Microsoft Sentinel", ""]
+    ranked = sorted(incidents, key=lambda i: i.risk_score, reverse=True)
+    for inc in ranked:
+        hosts = inc.hosts or [inc.host]
+        src_ips = sorted({a.src_ip for a in inc.alerts if a.src_ip})
+        start = inc.first_seen().strftime("%Y-%m-%dT%H:%M:%SZ")
+        end = inc.last_seen().strftime("%Y-%m-%dT%H:%M:%SZ")
+        sigs = sorted({a.signature for a in inc.alerts})
+        chain = " -> ".join(mitre.sort_tactics(inc.tactics)) or "n/a"
+        out.append(f"// {inc.incident_id}  risk={inc.risk_score}  {inc.severity.label()}  chain: {chain}")
+        out.append("SecurityAlert")
+        out.append(f"| where TimeGenerated between (datetime({start}) - 15m .. datetime({end}) + 15m)")
+        out.append("| where " + " or ".join(f'CompromisedEntity =~ "{h}"' for h in hosts))
+        if src_ips:
+            out.append("| extend SrcIp = tostring(parse_json(ExtendedProperties)[\"Source IP\"])")
+            out.append("| where SrcIp in (" + ", ".join(f'"{ip}"' for ip in src_ips) + ")")
+        if inc.techniques:
+            out.append("| extend Techniques = tostring(Techniques)")
+            out.append("| where " + " or ".join(f'Techniques has "{t}"' for t in sorted(inc.techniques)))
+        out.append("| project TimeGenerated, AlertName, AlertSeverity, CompromisedEntity, Tactics, Techniques")
+        out.append("| order by TimeGenerated asc")
+        out.append(f"// signatures seen: {'; '.join(sigs)[:300]}")
+        out.append("")
+    return "\n".join(out)

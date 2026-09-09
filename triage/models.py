@@ -9,9 +9,8 @@ the shape of the data.
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Optional
 
 
 class Severity(enum.IntEnum):
@@ -68,6 +67,7 @@ class Incident:
     incident_id: str
     host: str
     alerts: list[Alert] = field(default_factory=list)
+    hosts: list[str] = field(default_factory=list)  # >1 when merged by src_ip pivot
     tactics: set[str] = field(default_factory=set)   # MITRE tactic names
     techniques: set[str] = field(default_factory=set)  # MITRE technique ids
     risk_score: int = 0
@@ -83,6 +83,8 @@ class Incident:
         return {
             "incident_id": self.incident_id,
             "host": self.host,
+            "hosts": self.hosts or [self.host],
+            "src_ips": sorted({a.src_ip for a in self.alerts if a.src_ip}),
             "severity": self.severity.label(),
             "risk_score": self.risk_score,
             "first_seen": self.first_seen().isoformat(),
