@@ -9,11 +9,11 @@ import os
 import tempfile
 from datetime import datetime
 
-from triage.models import Alert, Severity
-from triage.correlator import Correlator
-from triage.scorer import score_incident, score_all
-from triage.parsers import parse_json, parse_csv
 from triage import mitre
+from triage.correlator import Correlator
+from triage.models import Alert, Severity
+from triage.parsers import parse_csv, parse_json
+from triage.scorer import score_all, score_incident
 
 
 def _alert(host, minute, sev, tech=""):
@@ -164,3 +164,81 @@ def test_parse_csv_missing_column_raises():
         assert raised
     finally:
         os.unlink(path)
+
+
+# ---- v0.2: Suricata EVE, src_ip pivot, dampening, KQL ----
+import json
+
+from triage import report
+from triage.parsers import load, parse_suricata_eve
+
+
+def test_suricata_eve_parser_filters_and_maps(tmp_path):
+    alerts = parse_suricata_eve("samples/eve.json")
+    assert len(alerts) == 5  # the flow record is skipped
+    assert alerts[0].technique_id == "T1046"
+    assert alerts[1].severity == Severity.CRITICAL  # suricata severity 1
+    assert alerts[2].technique_id == "T1505"  # sub-technique rolled up
+    assert alerts[3].technique_id == "T1041"  # pulled from the signature text
+    assert alerts[0].source_host == "10.0.0.5"
+
+
+def test_load_autodetects_suricata():
+    assert len(load("samples/eve.json")) == 5
+    assert len(load("samples/alerts.json")) == 8
+
+
+def _a(ts, host, sig, sev, tech="", src=""):
+    return Alert(datetime.fromisoformat(ts), host, sig, Severity.from_str(sev), tech, "", src)
+
+
+def test_pivot_merges_lateral_movement_across_hosts():
+    alerts = [
+        _a("2026-06-13T02:00:00", "web-01", "SQLi", "high", "T1190", "203.0.113.9"),
+        _a("2026-06-13T02:05:00", "web-01", "Web shell", "critical", "T1059", "203.0.113.9"),
+        _a("2026-06-13T02:12:00", "db-01", "SMB lateral", "high", "T1021", "203.0.113.9"),
+    ]
+    assert len(Correlator().correlate(alerts)) == 2
+    merged = Correlator(pivot_src_ip=True).correlate(alerts)
+    assert len(merged) == 1
+    assert merged[0].hosts == ["db-01", "web-01"]
+
+
+def test_pivot_never_joins_on_internal_ip():
+    alerts = [
+        _a("2026-06-13T02:00:00", "ws-001", "Brute force", "medium", "T1110", "10.0.5.4"),
+        _a("2026-06-13T02:01:00", "ws-002", "Brute force", "medium", "T1110", "10.0.5.4"),
+    ]
+    assert len(Correlator(pivot_src_ip=True).correlate(alerts)) == 2
+
+
+def test_single_stage_high_is_capped_below_high():
+    inc = Correlator().correlate([_a("2026-06-13T02:00:00", "db-01", "Large outbound transfer", "high", "T1041")])
+    score_all(inc)
+    assert inc[0].severity == Severity.MEDIUM
+    assert inc[0].risk_score == 59
+
+
+def test_single_critical_is_not_capped():
+    inc = Correlator().correlate([_a("2026-06-13T02:00:00", "db-01", "Ransomware burst", "critical", "T1486")])
+    score_all(inc)
+    assert inc[0].severity == Severity.CRITICAL
+
+
+def test_kql_has_one_query_per_incident():
+    alerts = load("samples/alerts.json")
+    incidents = Correlator().correlate(alerts)
+    score_all(incidents)
+    kql = report.render_kql(incidents)
+    assert kql.count("SecurityAlert\n") == len(incidents)
+    assert 'CompromisedEntity =~ "web-01"' in kql
+    assert 'Techniques has "T1190"' in kql
+
+
+def test_json_report_carries_hosts_and_src_ips():
+    alerts = load("samples/alerts.json")
+    incidents = Correlator().correlate(alerts)
+    score_all(incidents)
+    data = json.loads(report.render_json(incidents, len(alerts)))
+    top = max(data["incidents"], key=lambda i: i["risk_score"])
+    assert "203.0.113.9" in top["src_ips"]
