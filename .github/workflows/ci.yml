@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check triage tests bench
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest tests/ -v
+
+  # The labelled benchmark is part of CI: a scoring change that drops
+  # campaign recall below 1.0 or raises the false-positive rate above 5 %
+  # on the reference dataset fails the build.
+  benchmark:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Evaluate against the labelled week dataset
+        run: |
+          python bench/evaluate.py bench/data/week.json --pivot-src-ip --json | tee result.json
+          python - <<'PY'
+          import json; r = json.load(open("result.json"))
+          assert r["campaign_recall"] >= 1.0, r
+          assert r["false_positive_rate"] <= 0.05, r
+          assert r["precision_at_10"] >= 0.9, r
+          print("benchmark gate passed")
+          PY
+      - name: Sample must still exit 1 (critical incident present)
+        run: |
+          if triage samples/alerts.json --quiet; then echo "expected exit 1" && exit 1; fi
