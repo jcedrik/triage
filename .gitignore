@@ -6,3 +6,6 @@ report.json
 dashboard.html
 dashboard_preview.png
 .venv/
+.ruff_cache/
+*.kql
+dashboard.html
