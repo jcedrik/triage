@@ -33,6 +33,14 @@ def _parse_ts(value: str) -> datetime:
             return datetime.strptime(value, fmt)
         except ValueError:
             continue
+    # Suricata writes "2026-06-13T02:14:03.512345+0000": microseconds and a
+    # colon-less offset, which fromisoformat only accepts from Python 3.11.
+    m = re.match(r"^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})(\.\d{1,6})?(Z|[+-]\d{2}:?\d{2})?$", value)
+    if m:
+        base = datetime.strptime(m.group(1).replace(" ", "T"), "%Y-%m-%dT%H:%M:%S")
+        if m.group(2):
+            base = base.replace(microsecond=int(m.group(2)[1:].ljust(6, "0")))
+        return base  # naive, like every other path: all inputs are compared in one timeline
     # Last resort: ISO parser (handles offsets like +00:00).
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
